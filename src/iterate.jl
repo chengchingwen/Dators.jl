@@ -10,10 +10,9 @@ function _take_ref(rid, caller, args...)
         synctake = true
         lock(rv.synctake)
     end
-
   
   v = try
-    v = take!(rv, args...)
+    take!(rv, args...)
   catch e
     if synctake
       unlock(rv.synctake)
