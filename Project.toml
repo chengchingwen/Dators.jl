@@ -1,0 +1,7 @@
+name = "Dators"
+uuid = "70a9cf4c-df3d-4d28-a4f3-dff119f93b40"
+authors = ["chengchingwen <adgjl5645@hotmail.com>"]
+version = "0.1.0"
+
+[deps]
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
