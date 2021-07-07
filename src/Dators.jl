@@ -3,6 +3,8 @@ module Dators
 import Base.Threads
 import Distributed
 
+export Dator
+
 include("./iterate.jl")
 include("./types.jl")
 include("./executor.jl")
