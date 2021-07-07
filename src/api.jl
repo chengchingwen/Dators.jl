@@ -2,7 +2,7 @@ Base.filter(f, d::Dator) = setfield(d, :do_post_f, (ch, x)->f(x) ? d.do_post_f(c
 
 
 function batch(d::Dator, n, drop_last=true)
-  buf = Array{eltype(d)}(undef, n)
+  buf = Vector{eltype(d)}(undef, n)
   function _batch(ch, f, src, do_post_f)
     c = 0
     for data in src
@@ -24,5 +24,5 @@ function batch(d::Dator, n, drop_last=true)
     end
   end
 
-  return Dator(identity, d; mode=Thread(1), map_do_f=_batch)
+  return Dator(identity, d; mode=Thread(1), map_do_f=_batch, res_ctype=Vector{eltype(d)})
 end
