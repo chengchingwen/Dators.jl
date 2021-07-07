@@ -33,11 +33,15 @@ _take!(rr::RemoteChannel, args...) = Distributed.call_on_owner(_take_ref, rr, my
 
 Base.take!(rr::RemoteChannel, args...) = _take!(rr, args...)
 
+unwrap_remote(e) = e
+unwrap_remote(e::RemoteException) = e.captured.ex
+
 function Base.iterate(rc::Distributed.RemoteChannel, state=nothing)
   try
     return (take!(rc), nothing)
   catch e
-    if isa(e, InvalidStateException) && e.state === :closed
+    ce = unwrap_remote(e)
+    if isa(ce, InvalidStateException) && ce.state === :closed
       return nothing
     else
       rethrow()
