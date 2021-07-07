@@ -210,3 +210,8 @@ end
 
 Base.eltype(d::Dator{R}) where R = eltype(R)
 
+function Base.show(io::IO, d::Dator)
+  print(io, "Dator{", eltype(d), ", ", eltype(d.input[]))
+  print(io, ", ", d.mode, "}(", d.status[], ")")
+end
+
