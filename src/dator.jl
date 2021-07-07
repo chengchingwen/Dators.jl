@@ -128,6 +128,7 @@ function reset!(x)
 end
 reset!(x::Union{AbstractArray, Tuple, NamedTuple, AbstractDict}) = x
 function reset!(d::Dator)
+  d.status == Init && return d
   reset!(d.srcs)
   mode = d.mode
   srcs = d.srcs
@@ -192,7 +193,7 @@ function reset!(d::Dator)
       r[] = End
     end
   end
-  r[] = Init
+  d.status[] = Init
   return d
 end
 
