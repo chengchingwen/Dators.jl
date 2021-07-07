@@ -171,6 +171,8 @@ function reset!(d::Dator)
 
   execs = create_executors!(f, d.execs, chn, dst, mode; map_do_f, do_post_f)
 
+  close(d.input[])
+  close(d.result[])
   d.input[] = chn
   d.result[] = dst
 
