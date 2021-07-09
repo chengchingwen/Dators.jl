@@ -1,5 +1,6 @@
 Base.filter(f, d::Dator) = setfield(d, :do_post_f, (ch, x)->f(x) ? d.do_post_f(ch, x) : nothing)
 
+Base.map(f, d::Dator) = setfield(d, :f, f∘d.f)
 
 function batch(d::Dator, n, drop_last=true)
   buf = Vector{eltype(d)}(undef, n)
