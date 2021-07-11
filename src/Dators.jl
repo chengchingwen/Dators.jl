@@ -14,5 +14,6 @@ include("./connect.jl")
 include("./executor.jl")
 include("./dator.jl")
 include("./source.jl")
+include("./api.jl")
 
 end

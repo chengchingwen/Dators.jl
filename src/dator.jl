@@ -9,7 +9,7 @@ struct Dator{T, S, M <:ComputeType, D <: AbstractDator{S}, E <: Executor{T, S, M
     execs::E
 end
 
-function Dator(f, src::Dator, dsts::Vector{<:RemoteChannel}; compute_type=Thread(3), src_connect_type=Mixed(), dst_connect_type=Mixed(), do_take! = do_take!, do_put! = do_put!, csize=8)
+function Dator(f, src::AbstractDator, dsts::Vector{<:RemoteChannel}; compute_type=Thread(3), src_connect_type=Mixed(), dst_connect_type=Mixed(), do_take! = do_take!, do_put! = do_put!, csize=8)
     srcs = src.dsts
     execs = Executor(f, do_take!, do_put!, compute_type; csize,
                      in_ctype=eltype(eltype(srcs)),
@@ -19,7 +19,7 @@ function Dator(f, src::Dator, dsts::Vector{<:RemoteChannel}; compute_type=Thread
     return Dator(src, dsts, compute_type, src_con, dst_con, execs)
 end
 
-function Dator(f, n::Integer, src::Dator, pid=myid(); kws...)
+function Dator(f, n::Integer, src::AbstractDator, pid=myid(); kws...)
     srcs = src.dsts
     csize = get(kws, :csize, 8)
     fi = get(kws, :do_take!, do_take!)
@@ -33,6 +33,7 @@ function Dator(f, n::Integer, src::Dator, pid=myid(); kws...)
 end
 
 function propagate(f, d::Dator, do_return=false)
+    f(d.src)
     f(d.src_con)
     f(d.execs)
     f(d.dst_con)

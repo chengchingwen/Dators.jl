@@ -48,25 +48,28 @@ function build_exec(f, in::RemoteChannel, out::RemoteChannel, mode; do_take! = d
             task_local_storage(:usr, Threads.threadid())
             while !should_stop()
                 v = do_take!(stopable_take!, ic)
-                should_stop() && return
+                should_stop() && break
                 r = f(v)
-                should_stop() && return
+                should_stop() && break
                 do_put!(stopable_put!, oc, r)
             end
+            close(oc)
         end
     end
 end
 
-start!(exe::Executor) = foreach(schedule, exe.tasks)
+function start!(exe::Executor)
+    foreach(reopen, exe.outs)
+    foreach(schedule, exe.tasks)
+end
+
 function stop!(exe::Executor)
     foreach(stop!, exe.tasks)
-    foreach(stop!, exe.ins)
     foreach(stop!, exe.outs)
     return
 end
 
 function cleanup!(exe::Executor)
-    foreach(cleanup!, exe.ins)
     foreach(cleanup!, exe.outs)
     return
 end

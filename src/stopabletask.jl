@@ -32,5 +32,5 @@ function Base.getproperty(t::StopableTask, name::Symbol)
 end
 
 should_stop() = task_local_storage(:should_stop)
-
+should_stop!() = task_local_storage(:should_stop, true)
 isfinished(t::StopableTask) = (st = status(t).state; st == :done || st == :failed)

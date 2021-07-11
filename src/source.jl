@@ -3,8 +3,8 @@ abstract type SrcDator{T} <: AbstractDator{T} end
 struct CreateSrc{T, F, M, C <: Connect} <: SrcDator{T}
     f::F
     task::Ref{StopableTask}
-    src::Vector{RemoteChannel{T}}
-    dsts::Vector{RemoteChannel{T}}
+    src::Vector{RemoteChannel{Channel{T}}}
+    dsts::Vector{RemoteChannel{Channel{T}}}
     mode::M
     con::C
 end
@@ -14,7 +14,7 @@ function CreateSrc(f, t::StopableTask, src::Vector{<:RemoteChannel}, dsts::Vecto
     return CreateSrc(f, Ref(t), src, dsts, mode, con)
 end
 
-function CreateSrc(f, mode=Async(3), pid=myid(); timeout=3, kws...)
+function CreateSrc(f, mode=Async(3), pid=myid(); kws...)
     inc = f()
     csize = get(kws, :csize, 8)
     ctype = haskey(kws, :ctype) ? get(kws, :ctype) : eltype(inc)
@@ -22,10 +22,9 @@ function CreateSrc(f, mode=Async(3), pid=myid(); timeout=3, kws...)
     dsts = create_channel(mode; csize, ctype)
     
     t = StopableTask(false) do
-        task_local_storage(:usr, timeout)
         while !should_stop()
             !isopen(inc) && break
-            v = _take_timeout!(inc, timeout)
+            v = stopable_take!(inc)
             should_stop() && break
             put!(src[1], v)
         end
@@ -35,54 +34,37 @@ function CreateSrc(f, mode=Async(3), pid=myid(); timeout=3, kws...)
     return CreateSrc(f, t, src, dsts, mode; connect_type=get(kws, :connect_type, Mixed()))
 end
 
-function _take_timeout!(chn, timeout)
-    @async begin
-        sleep(timeout)
-        lock(chn)
-        try
-            if !isempty(chn.cond_take.waitq)
-                close(chn)
-            end
-        finally
-            unlock(chn)
-        end
-    end
-    t = @async take!(chn)
-    try
-        wait(t)
-    catch
-        task_local_storage()[:should_stop] = true
-        return
-    end
-    return Base.task_result(t)
-end
-
 function start!(s::CreateSrc)
     schedule(s.task[])
     start!(s.con)
 end
 
-stop!(s::CreateSrc) = (stop!(s.task[]); stop!(s.con))
-cleanup!(s::CreateSrc) = cleanup!(s.con)
+function stop!(s::CreateSrc)
+    stop!(s.task[])
+    foreach(stop!, s.src)
+    stop!(s.con)
+end
+
+cleanup!(s::CreateSrc) = (foreach(cleanup!, s.src); cleanup!(s.con))
 function reset!(s::CreateSrc)
     stop!(s)
     cleanup!(s)
+    foreach(reopen, s.src)
     
     inc = s.f()
-    timeout = s.task[].storage[:usr]
     src = s.src
     t = StopableTask(false) do
-        task_local_storage(:usr, timeout)
         while !should_stop()
             !isopen(inc) && break
-            v = _take_timeout!(inc, timeout)
+            v = stopable_take!(inc)
             should_stop() && break
             put!(src[1], v)
         end
         close(src[1])
     end
     s.task[] = t
-    return
+    reset!(s.con)
+    return src
 end
 
 restart!(s::CreateSrc) = (reset!(s); start!(s))

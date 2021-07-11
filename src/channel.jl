@@ -37,16 +37,7 @@ isfull(rc::RemoteChannel) = remote_eval(remotecall_fetch, isfull, channel_from_i
 
 stop!(rc::RemoteChannel) = remote_eval(remote_do, stop!, channel_from_id, rc)
 function stop!(c::Channel)
-    excp = InvalidStateException("Task should stop", :stop)
-    lock(c)
-    try
-        Base.notify_error(c.cond_take, excp)
-        Base.notify_error(c.cond_take, excp)
-        Base.notify_error(c.cond_wait, excp)
-        Base.notify_error(c.cond_put, excp)
-    finally
-        unlock(c)
-    end
+    close(c)
     return
 end
 
@@ -64,11 +55,16 @@ end
 function stopable_take!(chn)
     should_stop() && return
     if isfinished(chn)
-        task_local_storage(:should_stop, true)
+        should_stop!()
         return
     end
     
-    r = safe_take!(chn)
+    r = try
+        safe_take!(chn)
+    catch e
+        should_stop!()
+        return
+    end
     return r
 end
 
