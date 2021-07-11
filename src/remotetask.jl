@@ -75,3 +75,5 @@ end
 status(rt::RemoteTask) = remote_eval(remotecall_fetch, status, task_from_id, rt)
 
 stop!(rt::RemoteTask) = remote_eval(remote_do, stop!, task_from_id, rt)
+
+isfinished(rt::RemoteTask) = (st = status(task).state; st == :done || st == :failed)

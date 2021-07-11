@@ -82,6 +82,7 @@ function connect_channel(from, to)
             task_local_storage(:usr, Threads.threadid())
             while !should_stop()
                 v = stopable_take!(fc)
+                should_stop() && return
                 stopable_put!(tc, v)
             end
         end
@@ -105,15 +106,17 @@ function stop!(con::Connect)
     return
 end
 
-function clear!(con::Connect)
-    foreach(clear!, con.froms)
-    foreach(clear!, con.tos)
+function cleanup!(con::Connect)
+    foreach(cleanup!, con.froms)
+    foreach(cleanup!, con.tos)
     return
 end
 
 function reset!(con::Connect)
     stop!(con)
-    clear!(con)
+    cleanup!(con)
     build_connection!(con)
     return con
 end
+
+isfinished(con::Connect) = all(isfinished, con.tasks)

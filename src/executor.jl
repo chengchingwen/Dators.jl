@@ -65,15 +65,18 @@ function stop!(exe::Executor)
     return
 end
 
-function clear!(exe::Executor)
-    foreach(clear!, exe.ins)
-    foreach(clear!, exe.outs)
+function cleanup!(exe::Executor)
+    foreach(cleanup!, exe.ins)
+    foreach(cleanup!, exe.outs)
     return
 end
 
 function reset!(exe::Executor)
     stop!(exe)
-    clear!(exe)
+    cleanup!(exe)
     build_execs!(exe)
     return exe
 end
+
+isfinished(exe::Executor) = all(isfinished, exe.tasks)
+

@@ -52,13 +52,21 @@ end
 
 function stopable_put!(chn, v)
     should_stop() && return
-    
+    if !isopen(chn)
+        task_local_storage(:should_stop, true)
+        return
+    end
+
     put!(chn, v)
     return v
 end
 
 function stopable_take!(chn)
     should_stop() && return
+    if isfinished(chn)
+        task_local_storage(:should_stop, true)
+        return
+    end
     
     r = safe_take!(chn)
     return r
@@ -87,8 +95,8 @@ function putback_buffered!(c::Channel{T}, v) where T
     return v
 end
 
-clear!(rc::RemoteChannel) = remote_eval(remote_do, clear!, channel_from_id, rc)
-function clear!(c::Channel)
+cleanup!(rc::RemoteChannel) = remote_eval(remote_do, cleanup!, channel_from_id, rc)
+function cleanup!(c::Channel)
     lock(c)
     try
         if !isempty(c.data)
@@ -112,3 +120,5 @@ function reopen(c::Channel)
     end
 end
 
+isfinished(rc::RemoteChannel) = remote_eval(remotecall_fetch, isfinished, channel_from_id, rc)
+isfinished(c::Channel) = !isopen(c) && isempty(c)
