@@ -1,14 +1,17 @@
 module Dators
 
 import Base.Threads
-import Distributed
+using Distributed
 
 export Dator
 
-include("./iterate.jl")
+include("./stopabletask.jl")
+include("./channel.jl")
+include("./taskstatus.jl")
+include("./remotetask.jl")
 include("./types.jl")
+include("./connect.jl")
 include("./executor.jl")
 include("./dator.jl")
-include("./api.jl")
 
 end

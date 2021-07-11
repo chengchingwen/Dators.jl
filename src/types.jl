@@ -1,31 +1,47 @@
-abstract type PMode end
-abstract type Parallel <: PMode end
+abstract type ConnectType end
 
-struct Async <: PMode
+struct Mixed <: ConnectType end
+struct Parallel <: ConnectType
+    nt::Int
+    overlap::Bool
+end
+
+Parallel() = Parallel(0, false)
+
+abstract type ComputeType end
+abstract type LocalComputeType <: ComputeType end
+abstract type RemoteComputeType <: ComputeType end
+
+struct Async <: LocalComputeType
+    n::Int
+end
+
+struct Thread <: LocalComputeType
   n::Int
 end
 
-struct Thread <: PMode
+struct Process <: RemoteComputeType
   n::Int
 end
 
-struct Process <: Parallel
-  n::Int
-end
-
-struct ProcessWithIDs <: Parallel
+struct ProcessWithIDs <: RemoteComputeType
   ids::Vector{Int}
 end
 
-num(mode::Async) = mode.n
-num(mode::Thread) = mode.n
+num(mode::LocalComputeType) = mode.n
 num(mode::Process) = mode.n
 num(mode::ProcessWithIDs) = length(mode.ids)
 
-ids(mode::Async) = 1:mode.n
-ids(mode::Thread) = 1:mode.n
-ids(mode::Process) = 1:mode.n
+ids(mode::LocalComputeType) = (myid() for _ in 1:num(mode))
+ids(mode::Process) = (Distributed.nextproc() for _ in 1:num(mode))
 ids(mode::ProcessWithIDs) = mode.ids
 
-const ChannelLike{T} = Union{Channel{T}, Distributed.RemoteChannel{Channel{T}}}
+function create_channel(mode::ComputeType; csize=16, ctype=Any)
+    return [RemoteChannel(()->Channel{ctype}(csize), id)
+            for id in ids(mode)]
+end
 
+function create_channel(n::Integer, pid::Integer=myid(); csize=16, ctype=Any)
+    return [RemoteChannel(()->Channel{ctype}(csize), pid)
+            for _ in 1:n]
+end
