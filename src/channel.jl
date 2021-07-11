@@ -1,3 +1,37 @@
+#bypass julia issue #33972
+function _take_ref(rid, caller, args...)
+  rv = Distributed.lookup_ref(rid)
+    synctake = false
+    if myid() != caller && rv.synctake !== nothing
+        # special handling for local put! / remote take! on unbuffered channel
+        # github issue #29932
+        synctake = true
+        lock(rv.synctake)
+    end
+
+  v = try
+    take!(rv, args...)
+  catch e
+    if synctake
+      unlock(rv.synctake)
+    end
+    rethrow(e)
+  end
+
+  isa(v, RemoteException) && (myid() == caller) && throw(v)
+
+    if synctake
+        return Distributed.SyncTake(v, rv)
+    else
+        return v
+    end
+end
+
+_take!(rr::RemoteChannel, args...) = Distributed.call_on_owner(_take_ref, rr, myid(), args...)::eltype(rr)
+
+safe_take!(rr::RemoteChannel, args...) = _take!(rr, args...)
+safe_take!(c::Channel) = take!(c)
+
 isfull(c::Channel) = Base.n_avail(c) >= c.sz_max
 isfull(rc::RemoteChannel) = remote_eval(remotecall_fetch, isfull, channel_from_id, rc)
 
@@ -26,7 +60,7 @@ end
 function stopable_take!(chn)
     should_stop() && return
     
-    r = take!(chn)
+    r = safe_take!(chn)
     return r
 end
 
@@ -66,3 +100,15 @@ function clear!(c::Channel)
     end
     return
 end
+
+reopen(rc::RemoteChannel) = remote_eval(remote_do, reopen, channel_from_id, rc)
+function reopen(c::Channel)
+    lock(c)
+    try
+        c.state = :open
+        c.excp = nothing
+    finally
+        unlock(c)
+    end
+end
+
