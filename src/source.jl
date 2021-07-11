@@ -1,4 +1,4 @@
-abstract type SrcDator{T} end
+abstract type SrcDator{T} <: AbstractDator{T} end
 
 struct CreateSrc{T, F, M, C <: Connect} <: SrcDator{T}
     f::F
@@ -25,7 +25,7 @@ function CreateSrc(f, mode=Async(3), pid=myid(); timeout=3, kws...)
         task_local_storage(:usr, timeout)
         while !should_stop()
             !isopen(inc) && break
-            v = _take_timeout(inc, timeout)
+            v = _take_timeout!(inc, timeout)
             should_stop() && break
             put!(src[1], v)
         end
@@ -35,7 +35,7 @@ function CreateSrc(f, mode=Async(3), pid=myid(); timeout=3, kws...)
     return CreateSrc(f, t, src, dsts, mode; connect_type=get(kws, :connect_type, Mixed()))
 end
 
-function _take_timeout(chn, timeout)
+function _take_timeout!(chn, timeout)
     @async begin
         sleep(timeout)
         lock(chn)
@@ -75,7 +75,7 @@ function reset!(s::CreateSrc)
         task_local_storage(:usr, timeout)
         while !should_stop()
             !isopen(inc) && break
-            v = _take_timeout(inc, timeout)
+            v = _take_timeout!(inc, timeout)
             should_stop() && break
             put!(src[1], v)
         end
@@ -85,6 +85,6 @@ function reset!(s::CreateSrc)
     return
 end
 
-restart!(s::CreateSrc) = (reset!(s); start!(d))
+restart!(s::CreateSrc) = (reset!(s); start!(s))
 
 isfinished(s::CreateSrc) = isfinished(s.task[])
