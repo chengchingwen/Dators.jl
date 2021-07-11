@@ -33,4 +33,6 @@ end
 
 should_stop() = task_local_storage(:should_stop)
 should_stop!() = task_local_storage(:should_stop, true)
+dont_stop!() = task_local_storage(:should_stop, false)
+
 isfinished(t::StopableTask) = (st = status(t).state; st == :done || st == :failed)

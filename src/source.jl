@@ -9,6 +9,8 @@ struct CreateSrc{T, F, M, C <: Connect} <: SrcDator{T}
     con::C
 end
 
+Base.eltype(::CreateSrc{T}) where T = T
+
 function CreateSrc(f, t::StopableTask, src::Vector{<:RemoteChannel}, dsts::Vector{<:RemoteChannel}, mode; connect_type=Mixed())
     con = Connect(src, dsts, connect_type)
     return CreateSrc(f, Ref(t), src, dsts, mode, con)
