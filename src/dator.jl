@@ -11,7 +11,7 @@ end
 
 Base.eltype(::Dator{T}) where T = T
 
-function Dator(f, src::AbstractDator, dsts::Vector{<:RemoteChannel}; compute_type=Thread(3), src_connect_type=Mixed(), dst_connect_type=Mixed(), do_take! = do_take!, do_put! = do_put!, csize=8)
+function Dator(f, src::AbstractDator, dsts::Vector{<:RemoteChannel}; compute_type=Thread(3), src_connect_type=Mixed(), dst_connect_type=Mixed(), do_take! = do_take!, do_put! = do_put!, csize=8, out_type=Any)
     srcs = src.dsts
     execs = Executor(f, do_take!, do_put!, compute_type; csize,
                      in_ctype=eltype(eltype(srcs)),
