@@ -3,8 +3,12 @@ module Dators
 import Base.Threads
 using Distributed
 
+using ResultTypes
+
 export Dator
 
+include("./thread.jl")
+include("./channel_result.jl")
 include("./stopabletask.jl")
 include("./channel.jl")
 include("./taskstatus.jl")

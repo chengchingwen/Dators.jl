@@ -16,8 +16,9 @@ do_put!(put!, chn, r) = put!(chn, r)
 Executor(f, mode=Thread(3); do_take! = do_take!, do_put! = do_put!, csize=8, in_ctype=Any, out_ctype=Any) = Executor(f, do_take!, do_put!, mode; csize, in_ctype, out_ctype)
 
 function Executor(f, fi, fo, mode; csize=8, in_ctype=Any, out_ctype=Any)
-    ins = create_channel(mode; csize, ctype=in_ctype)
-    outs = create_channel(mode; csize, ctype=out_ctype)
+    indices = collect(ids(mode))
+    ins = create_channel(indices, csize, in_ctype)
+    outs = create_channel(indices, csize, out_ctype)
     tasks = build_execs(f, ins, outs, mode; do_take! = fi, do_put! = fo)
     Executor(ins, outs, f, fi, fo, mode, tasks)
 end
@@ -44,16 +45,17 @@ function build_exec(f, in::RemoteChannel, out::RemoteChannel, mode; do_take! = d
     return RemoteTask(in.where, remoteref_id(in), remoteref_id(out)) do irrid, orrid
         ic = channel_from_id(irrid)
         oc = channel_from_id(orrid)
-        StopableTask(thread) do
+        return StopableTask(thread) do
             task_local_storage(:usr, Threads.threadid())
             while !should_stop()
                 v = do_take!(stopable_take!, ic)
+                (iserror(v) || should_stop()) && break
+                r = f(unwrap(v))
                 should_stop() && break
-                r = f(v)
-                should_stop() && break
-                do_put!(stopable_put!, oc, r)
+                iserror(do_put!(stopable_put!, oc, r)) && break
             end
             close(oc)
+            return oc.state
         end
     end
 end

@@ -36,12 +36,14 @@ ids(mode::LocalComputeType) = (myid() for _ in 1:num(mode))
 ids(mode::Process) = (Distributed.nextproc() for _ in 1:num(mode))
 ids(mode::ProcessWithIDs) = mode.ids
 
-function create_channel(mode::ComputeType; csize=16, ctype=Any)
-    return [RemoteChannel(()->Channel{ctype}(csize), id)
-            for id in ids(mode)]
-end
 
-function create_channel(n::Integer, pid::Integer=myid(); csize=16, ctype=Any)
-    return [RemoteChannel(()->Channel{ctype}(csize), pid)
-            for _ in 1:n]
+create_channel(mode::ComputeType; csize=16, ctype=Any) =
+    create_channel(ids(mode), csize, ctype)
+
+create_channel(n::Integer, pid::Integer=myid(); csize=16, ctype=Any) =
+    create_channel(ntuple(_->pid, n), csize, ctype)
+
+function create_channel(ids, csize=16, ctype=Any)
+    return [RemoteChannel(()->Channel{ctype}(csize), id)
+            for id in ids]
 end

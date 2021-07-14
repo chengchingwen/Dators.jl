@@ -21,14 +21,28 @@ function Dator(f, src::AbstractDator, dsts::Vector{<:RemoteChannel}; compute_typ
     return Dator(src, dsts, compute_type, src_con, dst_con, execs)
 end
 
+function unwrap_type(::Type{<: Result{T, E}}) where {T, E}
+    return T
+end
+
+unwrap_type(t::Type) = t
+
+function outtype(f, fi, fo, intype)
+    it_list = Base.return_types(fi, Tuple{typeof(take_result!), Channel{intype}})
+    it = unwrap_type(isempty(it_list) ? Any : first(it_list))
+    tt_list = Base.return_types(f, Tuple{it})
+    tt = unwrap_type(isempty(tt_list) ? Any : first(tt_list))
+    ot_list = Base.return_types(fo, Tuple{typeof(put_result!), Channel{tt}, tt})
+    ot = unwrap_type(isempty(ot_list) ? Any : first(ot_list))
+    return ot
+end
+
 function Dator(f, n::Integer, src::AbstractDator, pid=myid(); kws...)
     srcs = src.dsts
     csize = get(kws, :csize, 8)
     fi = get(kws, :do_take!, do_take!)
     fo = get(kws, :do_put!, do_put!)
-    it = Base.return_types(fi, Tuple{typeof(take!), Channel{eltype(eltype(srcs))}})[]
-    tt = Base.return_types(f, Tuple{it})[]
-    ot = Base.return_types(fo, Tuple{typeof(put!), Channel{Any}, tt})[]
+    ot = outtype(f, fi, fo, eltype(src))
     out_type = haskey(kws, :out_type) ? kws[:out_type] : ot
     dsts = create_channel(n, pid; csize, ctype=out_type)
     return Dator(f, src, dsts; kws...)
@@ -53,3 +67,6 @@ function isfinished(d::Dator)
         isfinished(d.execs) && isfinished(d.dst_con)
 end
 
+function isstarted(d::Dator)
+    return all(t->status(t).state != :init, d.execs.tasks)
+end

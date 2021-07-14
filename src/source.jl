@@ -22,13 +22,13 @@ function CreateSrc(f, mode=Async(3), pid=myid(); kws...)
     ctype = haskey(kws, :ctype) ? get(kws, :ctype) : eltype(inc)
     src = create_channel(1, pid; csize, ctype)
     dsts = create_channel(mode; csize, ctype)
-    
+
     t = StopableTask(false) do
         while !should_stop()
             !isopen(inc) && break
             v = stopable_take!(inc)
-            should_stop() && break
-            put!(src[1], v)
+            (iserror(v) || should_stop()) && break
+            stopable_put!(src[1], unwrap(v))
         end
         close(src[1])
     end
@@ -52,15 +52,15 @@ function reset!(s::CreateSrc)
     stop!(s)
     cleanup!(s)
     foreach(reopen, s.src)
-    
+
     inc = s.f()
     src = s.src
     t = StopableTask(false) do
         while !should_stop()
             !isopen(inc) && break
             v = stopable_take!(inc)
-            should_stop() && break
-            put!(src[1], v)
+            (iserror(v) || should_stop()) && break
+            stopable_put!(src[1], unwrap(v))
         end
         close(src[1])
     end

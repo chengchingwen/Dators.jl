@@ -1,70 +1,25 @@
-#bypass julia issue #33972
-function _take_ref(rid, caller, args...)
-  rv = Distributed.lookup_ref(rid)
-    synctake = false
-    if myid() != caller && rv.synctake !== nothing
-        # special handling for local put! / remote take! on unbuffered channel
-        # github issue #29932
-        synctake = true
-        lock(rv.synctake)
+stop_channel_exception() = InvalidStateException("Channel should stop.", :stop)
+
+function stopable_put!(chn, v)::Result{eltype(chn), InvalidStateException}
+    should_stop() && return stop_channel_exception()
+    if @thread1_do !isopen(chn)
+        should_stop!()
+        return stop_channel_exception()
     end
 
-  v = try
-    take!(rv, args...)
-  catch e
-    if synctake
-      unlock(rv.synctake)
-    end
-    rethrow(e)
-  end
-
-  isa(v, RemoteException) && (myid() == caller) && throw(v)
-
-    if synctake
-        return Distributed.SyncTake(v, rv)
-    else
-        return v
-    end
+    r = put_result!(chn, v)
+    return r
 end
 
-_take!(rr::RemoteChannel, args...) = Distributed.call_on_owner(_take_ref, rr, myid(), args...)::eltype(rr)
-
-safe_take!(rr::RemoteChannel, args...) = _take!(rr, args...)
-safe_take!(c::Channel) = take!(c)
-
-isfull(c::Channel) = Base.n_avail(c) >= c.sz_max
-isfull(rc::RemoteChannel) = remote_eval(remotecall_fetch, isfull, channel_from_id, rc)
-
-stop!(rc::RemoteChannel) = remote_eval(remote_do, stop!, channel_from_id, rc)
-function stop!(c::Channel)
-    close(c)
-    return
-end
-
-function stopable_put!(chn, v)
-    should_stop() && return
-    if !isopen(chn)
-        task_local_storage(:should_stop, true)
-        return
-    end
-
-    put!(chn, v)
-    return v
-end
-
-function stopable_take!(chn)
-    should_stop() && return
+function stopable_take!(chn)::Result{eltype(chn), InvalidStateException}
+    should_stop() && return stop_channel_exception()
     if isfinished(chn)
         should_stop!()
-        return
+        return stop_channel_exception()
     end
-    
-    r = try
-        safe_take!(chn)
-    catch e
-        should_stop!()
-        return
-    end
+
+    r = take_result!(chn)
+    iserror(r) && should_stop!()
     return r
 end
 
@@ -118,3 +73,8 @@ end
 
 isfinished(rc::RemoteChannel) = remote_eval(remotecall_fetch, isfinished, channel_from_id, rc)
 isfinished(c::Channel) = !isopen(c) && isempty(c)
+
+isfull(c::Channel) = Base.n_avail(c) >= c.sz_max
+isfull(rc::RemoteChannel) = remote_eval(remotecall_fetch, isfull, channel_from_id, rc)
+
+stop!(c) = (@thread1_do close(c); nothing)

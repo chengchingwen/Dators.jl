@@ -25,7 +25,7 @@ end
 
 function RemoteTask(f::Function, w::Worker, args...; kwargs...)
     rrid = RRID()
-    send_msg(w, MsgHeader(rrid), CallMsg{:call}(f, args, kwargs))
+    @thread1_do send_msg(w, MsgHeader(rrid), CallMsg{:call}(f, args, kwargs))
     return RemoteTask(w.id, rrid)
 end
 
@@ -58,17 +58,17 @@ function remote_eval(remotef, f, idf, r)
     return if r.where == myid()
         f(idf(rrid))
     else
-        return remotef(r.where, rrid) do rrid
+        return @thread1_do remotef(r.where, rrid) do rrid
             f(idf(rrid))
         end
     end
 end
 
-Base.schedule(rt::RemoteTask) = remote_do(rt.where, remoteref_id(rt)) do rrid
+Base.schedule(rt::RemoteTask) = @thread1_do remote_do(rt.where, remoteref_id(rt)) do rrid
     schedule(task_from_id(rrid))
 end
 
-Base.schedule(rt::RemoteTask, arg; error=false) = remote_do(rt.where, remoteref_id(rt)) do rrid
+Base.schedule(rt::RemoteTask, arg; error=false) = @thread1_do remote_do(rt.where, remoteref_id(rt)) do rrid
     schedule(task_from_id(rrid), arg; error)
 end
 

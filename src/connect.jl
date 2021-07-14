@@ -36,7 +36,7 @@ function build_connection!(tasks, froms, tos, mode::Mixed, monitors=IdDict{eltyp
             rc = monitors[to]
             remote_do(rc.where, remoteref_id(rc)) do rrid
                 c = channel_from_id(rrid)
-                safe_take!(c)
+                take!(c)
                 put!(c, n)
             end
         end
@@ -75,7 +75,7 @@ function build_connection!(tasks, froms, tos, mode::Parallel, monitors=IdDict{el
             rc = monitors[to]
             remote_do(rc.where, remoteref_id(rc)) do rrid
                 c = channel_from_id(rrid)
-                safe_take!(c)
+                take!(c)
                 put!(c, 0)
             end
         end
@@ -96,7 +96,7 @@ function build_connection!(tasks, froms, tos, mode::Parallel, monitors=IdDict{el
                 rc = monitors[to]
                 remote_do(rc.where, remoteref_id(rc)) do rrid
                     c = channel_from_id(rrid)
-                    v = safe_take!(c)
+                    v = take!(c)
                     put!(c, v+1)
                 end
 
@@ -109,7 +109,7 @@ function build_connection!(tasks, froms, tos, mode::Parallel, monitors=IdDict{el
             rc = monitors[to]
             remote_do(rc.where, remoteref_id(rc)) do rrid
                 c = channel_from_id(rrid)
-                safe_take!(c)
+                take!(c)
                 put!(c, nt)
             end
 
@@ -127,28 +127,29 @@ end
 
 function connect_channel(from, to, monitors)
     rc = monitors[to]
-    rt = RemoteTask(from.where, remoteref_id(from)) do rrid
+    rt = RemoteTask(from.where, remoteref_id(from), remoteref_id(to)) do rrid, torid
         fc = channel_from_id(rrid)
         tc = to.where == from.where ?
-            channel_from_id(remoteref_id(to)) :
+            channel_from_id(torid) :
             to
         StopableTask(true) do
-            task_local_storage(:usr, Threads.threadid())
+            thrdid = Threads.threadid()
+            task_local_storage(:usr, thrdid)
+            v = nothing
             while !should_stop()
                 v = stopable_take!(fc)
-                should_stop() && break
-                stopable_put!(tc, v)
+                (iserror(v) || should_stop()) && break
+                iserror(stopable_put!(tc, unwrap(v))) && break
             end
 
-            v = remotecall_fetch(rc.where, remoteref_id(rc)) do id
-                c = channel_from_id(id)
-                v = safe_take!(c)
-                v -= 1
-                put!(c, v)
-                if iszero(v)
-                    close(to)
+            c = @thread1_do remote_do(to.where, remoteref_id(rc)) do id
+                m = channel_from_id(id)
+                c = take!(m)
+                c -= 1
+                put!(m, c)
+                if iszero(c)
+                    close(channel_from_id(torid))
                 end
-                return v
             end
             return v
         end
