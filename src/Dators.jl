@@ -5,7 +5,7 @@ using Distributed
 
 using ResultTypes
 
-export Dator
+export Dator, CreateSrc
 
 include("./thread.jl")
 include("./channel_result.jl")
