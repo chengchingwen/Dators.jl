@@ -1,6 +1,6 @@
 struct Executor{O, I, M<:ComputeType, F, Fi, Fo}
-    ins::Vector{RemoteChannel{Channel{I}}}
-    outs::Vector{RemoteChannel{Channel{O}}}
+    ins::ChannelArray{I}
+    outs::ChannelArray{O}
     f::F
     fi::Fi
     fo::Fo
@@ -17,8 +17,8 @@ Executor(f, mode=Thread(3); do_take! = do_take!, do_put! = do_put!, csize=8, in_
 
 function Executor(f, fi, fo, mode; csize=8, in_ctype=Any, out_ctype=Any)
     indices = collect(ids(mode))
-    ins = create_channel(indices, csize, in_ctype)
-    outs = create_channel(indices, csize, out_ctype)
+    ins = ChannelArray{in_ctype}(indices, csize)
+    outs = ChannelArray{out_ctype}(indices, csize)
     tasks = build_execs(f, ins, outs, mode; do_take! = fi, do_put! = fo)
     Executor(ins, outs, f, fi, fo, mode, tasks)
 end
@@ -43,45 +43,43 @@ function build_exec(f, in::RemoteChannel, out::RemoteChannel, mode; do_take! = d
     thread = !(mode isa Async)
     @assert in.where == out.where
     return RemoteTask(in.where, remoteref_id(in), remoteref_id(out)) do irrid, orrid
-        ic = channel_from_id(irrid)
-        oc = channel_from_id(orrid)
-        return StopableTask(thread) do
-            task_local_storage(:usr, Threads.threadid())
-            while !should_stop()
-                v = do_take!(stopable_take!, ic)
-                (iserror(v) || should_stop()) && break
-                r = f(unwrap(v))
-                should_stop() && break
-                iserror(do_put!(stopable_put!, oc, r)) && break
+        t = let ic = channel_from_id(irrid), oc = channel_from_id(orrid)
+            StopableTask(thread) do
+                thrdid = Threads.threadid()
+                @debuginfo thrdid
+                local v = nothing
+                while !should_stop()
+                    v = do_take!(stopable_take!, ic)
+                    (iserror(v) || should_stop()) && break
+                    r = f(unwrap(v))
+                    should_stop() && break
+                    iserror(do_put!(stopable_put!, oc, r)) && break
+                end
+                close(oc)
+                return v
             end
-            close(oc)
-            return oc.state
         end
+        return t
     end
 end
 
 function start!(exe::Executor)
-    foreach(reopen, exe.outs)
     foreach(schedule, exe.tasks)
 end
 
 function stop!(exe::Executor)
     foreach(stop!, exe.tasks)
-    foreach(stop!, exe.outs)
-    return
-end
-
-function cleanup!(exe::Executor)
-    foreach(cleanup!, exe.outs)
+    close(exe.outs)
     return
 end
 
 function reset!(exe::Executor)
     stop!(exe)
-    cleanup!(exe)
+    reopen!(exe.outs)
     build_execs!(exe)
     return exe
 end
 
-isfinished(exe::Executor) = all(isfinished, exe.tasks)
+isfinished(exe::Executor) = istaskdone(exe) && !isopen(exe.outs)
 
+Base.istaskdone(exe::Executor) = all(isfinished, exe.tasks)

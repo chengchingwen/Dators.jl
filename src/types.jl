@@ -40,10 +40,6 @@ ids(mode::ProcessWithIDs) = mode.ids
 create_channel(mode::ComputeType; csize=16, ctype=Any) =
     create_channel(ids(mode), csize, ctype)
 
-create_channel(n::Integer, pid::Integer=myid(); csize=16, ctype=Any) =
-    create_channel(ntuple(_->pid, n), csize, ctype)
-
-function create_channel(ids, csize=16, ctype=Any)
-    return [RemoteChannel(()->Channel{ctype}(csize), id)
-            for id in ids]
+function create_channel!(buf, mode::ComputeType; csize=16)
+    create_channel!(buf, ids(mode), csize)
 end

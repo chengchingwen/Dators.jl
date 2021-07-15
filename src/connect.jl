@@ -1,8 +1,8 @@
 import Distributed: channel_from_id
 
 struct Connect{T, M<:ConnectType}
-    froms::Vector{RemoteChannel{Channel{T}}}
-    tos::Vector{RemoteChannel{Channel{T}}}
+    froms::ChannelArray{T}
+    tos::ChannelArray{T}
     mode::M
     tasks::Vector{RemoteTask}
     monitors::IdDict{RemoteChannel{Channel{T}}, RemoteChannel{Channel{Int}}}
@@ -10,7 +10,7 @@ end
 
 Base.eltype(::Connect{T}) where T = T
 
-function Connect(froms::Vector{<:RemoteChannel}, tos::Vector{<:RemoteChannel}, mode=Mixed())
+function Connect(froms::ChannelArray, tos::ChannelArray, mode=Mixed())
     tasks, mode, monitors = build_connection(froms, tos, mode)
     return Connect(froms, tos, mode, tasks, monitors)
 end
@@ -22,7 +22,7 @@ build_connection(froms, tos, mode::Mixed) = build_connection!(
     froms, tos, mode
 )
 
-function build_connection!(tasks, froms, tos, mode::Mixed, monitors=IdDict{eltype(tos), RemoteChannel{Channel{Int}}}())
+function build_connection!(tasks, froms, tos, mode::Mixed, monitors=IdDict{RemoteChannel{Channel{eltype(tos)}}, RemoteChannel{Channel{Int}}}())
     n = length(froms)
     for to in tos
         if !haskey(monitors, to)
@@ -62,7 +62,7 @@ function build_connection(froms, tos, mode::Parallel)
         tasks, froms, tos, Parallel(nt, r>0))
 end
 
-function build_connection!(tasks, froms, tos, mode::Parallel, monitors=IdDict{eltype(tos), RemoteChannel{Channel{Int}}}())
+function build_connection!(tasks, froms, tos, mode::Parallel, monitors=IdDict{RemoteChannel{Channel{eltype(tos)}}, RemoteChannel{Channel{Int}}}())
     for to in tos
         if !haskey(monitors, to)
             rc = RemoteChannel(to.where) do
@@ -128,30 +128,34 @@ end
 function connect_channel(from, to, monitors)
     rc = monitors[to]
     rt = RemoteTask(from.where, remoteref_id(from), remoteref_id(to)) do rrid, torid
-        fc = channel_from_id(rrid)
-        tc = to.where == from.where ?
-            channel_from_id(torid) :
-            to
-        StopableTask(true) do
-            thrdid = Threads.threadid()
-            task_local_storage(:usr, thrdid)
-            v = nothing
-            while !should_stop()
-                v = stopable_take!(fc)
-                (iserror(v) || should_stop()) && break
-                iserror(stopable_put!(tc, unwrap(v))) && break
-            end
-
-            c = @thread1_do remote_do(to.where, remoteref_id(rc)) do id
-                m = channel_from_id(id)
-                c = take!(m)
-                c -= 1
-                put!(m, c)
-                if iszero(c)
-                    close(channel_from_id(torid))
+        let fc = channel_from_id(rrid), tc = (to.where == from.where ? channel_from_id(torid) : to), to = to
+            StopableTask(true) do
+                thrdid = Threads.threadid()
+                @debuginfo thrdid
+                local v = nothing
+                while !should_stop()
+                    v = stopable_take!(fc)
+                    (iserror(v) || should_stop()) && break
+                    iserror(stopable_put!(tc, unwrap(v))) && break
                 end
+
+                @debuginfo loc=done_loop
+                r = @thread1_do remote_do(to.where, remoteref_id(rc)) do id
+                    begin
+                        m = channel_from_id(id)
+                        c = take!(m)
+                        c -= 1
+                        put!(m, c)
+                        if iszero(c)
+                            need_close = channel_from_id(torid)
+                            close(need_close)
+                        end
+                        return c
+                    end
+                end
+                @debuginfo loc=done
+                return v
             end
-            return v
         end
     end
 end
@@ -166,26 +170,23 @@ function Connect(froms::Vector, tos::Vector, mode=Mixed())
 end
 
 function start!(con::Connect)
-    foreach(reopen, con.tos)
     foreach(schedule, con.tasks)
 end
 
 function stop!(con::Connect)
     foreach(stop!, con.tasks)
-    foreach(stop!, con.tos)
-    return
-end
-
-function cleanup!(con::Connect)
-    foreach(cleanup!, con.tos)
+    close(con.tos)
+    empty!(con.monitors)
     return
 end
 
 function reset!(con::Connect)
     stop!(con)
-    cleanup!(con)
+    reopen!(con.tos)
     build_connection!(con)
     return con
 end
 
-isfinished(con::Connect) = all(isfinished, con.tasks)
+isfinished(con::Connect) = istaskdone(con) && !isopen(con.tos)
+
+Base.istaskdone(con::Connect) = all(isfinished, con.tasks)

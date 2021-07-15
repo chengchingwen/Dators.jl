@@ -53,13 +53,13 @@ function task_from_id(id)
     return rt.c.data[]
 end
 
-function remote_eval(remotef, f, idf, r)
+function remote_eval(remotef, f, idf, r, args...)
     rrid = remoteref_id(r)
     return if r.where == myid()
-        f(idf(rrid))
+        f(idf(rrid), args...)
     else
         return @thread1_do remotef(r.where, rrid) do rrid
-            f(idf(rrid))
+            f(idf(rrid), args...)
         end
     end
 end

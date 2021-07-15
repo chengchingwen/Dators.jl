@@ -1,24 +1,22 @@
 stop_channel_exception() = InvalidStateException("Channel should stop.", :stop)
 
 function stopable_put!(chn, v)::Result{eltype(chn), InvalidStateException}
+    @debuginfo loc=put_check
     should_stop() && return stop_channel_exception()
-    if @thread1_do !isopen(chn)
-        should_stop!()
-        return stop_channel_exception()
-    end
 
+    @debuginfo loc=pre_put put=$v
     r = put_result!(chn, v)
+    @debuginfo loc=post_put put=$r
     return r
 end
 
 function stopable_take!(chn)::Result{eltype(chn), InvalidStateException}
+    @debuginfo loc=take_check
     should_stop() && return stop_channel_exception()
-    if isfinished(chn)
-        should_stop!()
-        return stop_channel_exception()
-    end
 
+    @debuginfo loc=pre_take
     r = take_result!(chn)
+    @debuginfo loc=post_take take=$r
     iserror(r) && should_stop!()
     return r
 end
@@ -44,31 +42,6 @@ function putback_buffered!(c::Channel{T}, v) where T
         unlock(c)
     end
     return v
-end
-
-cleanup!(rc::RemoteChannel) = remote_eval(remote_do, cleanup!, channel_from_id, rc)
-function cleanup!(c::Channel)
-    lock(c)
-    try
-        if !isempty(c.data)
-            empty!(c.data)
-            notify(c.cond_put, nothing, true, false)
-        end
-    finally
-        unlock(c)
-    end
-    return
-end
-
-reopen(rc::RemoteChannel) = remote_eval(remote_do, reopen, channel_from_id, rc)
-function reopen(c::Channel)
-    lock(c)
-    try
-        c.state = :open
-        c.excp = nothing
-    finally
-        unlock(c)
-    end
 end
 
 isfinished(rc::RemoteChannel) = remote_eval(remotecall_fetch, isfinished, channel_from_id, rc)

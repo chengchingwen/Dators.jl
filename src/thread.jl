@@ -1,5 +1,11 @@
 
-thread1!(task::Task) = ccall(:jl_set_task_tid, Cvoid, (Any, Cint), task, 0)
+function thread1!(task::Task)
+    ccall(:jl_set_task_tid, Cvoid, (Any, Cint), task, 0)
+    if Threads.threadid() != 1
+        task.sticky = false
+    end
+    return
+end
 
 macro thread1(expr)
     letargs = Base._lift_one_interp!(expr)

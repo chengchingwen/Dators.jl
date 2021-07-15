@@ -8,7 +8,6 @@ function put_buffered_result(c::Channel{T}, v)::Result{T, InvalidStateException}
             Base.check_channel_state(c)
             wait(c.cond_put)
         end
-
         push!(c.data, v)
         # notify all, since some of the waiters may be on a "fetch" call.
         notify(c.cond_take, nothing, true, false)
@@ -51,9 +50,6 @@ end
 function check_channel_state_result(c::Channel)::Result{Nothing, InvalidStateException} where T
     if !isopen(c)
         excp = c.excp
-        if excp isa Bool
-            @show excp
-        end
         excp !== nothing && return excp
         return Base.closed_exception()
     end
@@ -64,9 +60,6 @@ function put_result!(c::Channel{T}, v)::Result{T, InvalidStateException} where T
     s = unwrap(check_channel_state_result(c))
     !isnothing(s) && return s
     v = convert(T, v)
-    if v isa Bool
-        @show v
-    end
     return Base.isbuffered(c) ? put_buffered_result(c, v) : put_unbuffered_result(c, v)
 end
 

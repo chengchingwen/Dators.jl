@@ -6,15 +6,14 @@ function Base.iterate(d::AbstractDator)
 end
 
 function Base.iterate(d::AbstractDator, state)
-    t = map(c->take_result!(c), Tuple(d.dsts))
-    if any(iserror, t)
-        return nothing
-    else
-        return (unwrap.(t), nothing)
+    t = ntuple(i->take_result!(d.dsts[i]), d.dsts.num)
+    r = map(t) do x
+        iserror(x) ? nothing : unwrap(x)
     end
+    return all(isnothing, r) ? nothing : (r, nothing)
 end
 
-batch(d, n, drop_last=true) = batch(collect, d, n, drop_last)
+batch(d, n, drop_last=true) = batch(identity, d, n, drop_last)
 function batch(f, d::AbstractDator, n, drop_last=true)
     function do_batch_take!(take!, c)::Result{Vector{eltype(c)}, InvalidStateException}
         count = 0
@@ -22,11 +21,12 @@ function batch(f, d::AbstractDator, n, drop_last=true)
         for i = 1:n
             v = take!(c)
             if iserror(v)
-                if drop_last
+                if !drop_last && !isempty(buf)
+                    dont_stop!()
+                    return buf
+                else
                     should_stop!()
                     return stop_channel_exception()
-                else
-                    return buf
                 end
             else
                 push!(buf, unwrap(v))
