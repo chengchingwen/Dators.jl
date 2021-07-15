@@ -18,26 +18,26 @@
     @test all(result)
 end
 
-# @testset "multi thread" begin
-#     src = Dators.CreateSrc(Dators.Thread(1)) do
-#         Channel() do ch
-#             for i = 1:100
-#                 put!(ch, i)
-#             end
-#         end
-#     end
+@testset "multi thread" begin
+    src = Dators.CreateSrc(Dators.Thread(1)) do
+        Channel() do ch
+            for i = 1:100
+                put!(ch, i)
+            end
+        end
+    end
 
-#     dator = Dators.Dator(x->x*x, 1, src;  compute_type=Dators.Thread(4))
-#     bd = Dators.batch(dator, 4)
-#     Dators.start!(bd)
+    dator = Dators.Dator(x->x*x, 1, src;  compute_type=Dators.Thread(4))
+    bd = Dators.batch(dator, 4, false)
+    Dators.start!(bd)
 
-#     result = Int64[]
-#     for (i, d) in enumerate(bd)
-#         for data in d[1]
-#             push!(result, data)
-#         end
-#     end
-#     sort!(result)
+    result = Int64[]
+    for (i, d) in enumerate(bd)
+        for data in d[1]
+            push!(result, data)
+        end
+    end
+    sort!(result)
 
-#     @test result == [x^2 for x in 1:100]
-# end
+    @test result == [x^2 for x in 1:100]
+end
