@@ -2,6 +2,8 @@
 
 A data implementation.
 
+[![codecov](https://codecov.io/gh/chengchingwen/Dators.jl/branch/master/graph/badge.svg?token=37ITLZ0VTO)](https://codecov.io/gh/chengchingwen/Dators.jl)
+
 ```julia
 julia> using Dators
 
