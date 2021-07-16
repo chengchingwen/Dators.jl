@@ -1,8 +1,9 @@
 # Dators.jl
 
-A data implementation.
-
+[![CI](https://github.com/chengchingwen/Dators.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/chengchingwen/Dators.jl/actions/workflows/CI.yml)
 [![codecov](https://codecov.io/gh/chengchingwen/Dators.jl/branch/master/graph/badge.svg?token=37ITLZ0VTO)](https://codecov.io/gh/chengchingwen/Dators.jl)
+
+A data implementation.
 
 ```julia
 julia> using Dators
